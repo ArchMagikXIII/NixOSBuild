@@ -112,8 +112,8 @@ stdenvNoCC.mkDerivation {
     url = "https://github.com/ArchMagikXIII/MagikOS.git";
     # Pinned to the last pushed commit. The local checkout has 3 newer commits
     # that are not on GitHub yet; bump this once they are pushed.
-    rev = "49b13047d6877fc9cad4de023824f9c7d9626f3d";
-    hash = "sha256-Fsn1tpxWr/O3p2ldUUuOUAi7Exdx5z2cYhEjChE9As8=";
+    rev = "8a38973a52ef99150f369354352373450e43cc6d";
+    hash = "sha256-BgrqmrwKIso5SgaCqBIIREJzoYN8ug0DqC0Sa7RW8ZI=";
   };
 
   dontBuild = true;

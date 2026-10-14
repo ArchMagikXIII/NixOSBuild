@@ -37,9 +37,8 @@ things the Arch packaging got for free:
 images. `install/` and `installer/` are excluded as Arch-specific `pacman` and
 partitioning scripts.
 
-Pinned to the last **pushed** MagikOS commit. Your local checkout had 3 commits
-ahead of `origin/main` (and an uncommitted `config/sway/bindings.conf`), so push
-those and bump `rev` in `nix/magikos.nix` to pick them up.
+Pinned to MagikOS `8a38973a`. Bump `rev` and `hash` in `nix/magikos.nix` to
+track upstream.
 
 ## Port status
 
@@ -53,12 +52,17 @@ Working:
 - Dotfiles deployed: `sway`, `alacritty`, `foot`, `kitty`, `ghostty`, `fish`,
   `fuzzel`, `wofi`, and the rest of `config/`
 
+Ported upstream (MagikOS `8a38973a`): `bin/magikos-pkg-backend` gained a Nix
+backend. Nix has no package database, so `pkg_installed` answers from the profile
+closure -- snapshotted once into a cache keyed on the profile generation, then
+grepped by attribute name. A transaction that genuinely needs a package fails
+loudly and points at the flake instead of mutating the store, because installing
+into a user profile would be silently undone by the next rebuild. Transactions
+no longer escalate, since user profiles are unprivileged. Covered by eight new
+cases in `test/shell.d/pkg-backend-test.sh`.
+
 Not yet ported:
 
-- **`bin/magikos-pkg-backend` requires `pacman` or `apt-get`.** There is no Nix
-  backend, so every `magikos pkg` subcommand fails, and ~60 scripts call
-  `magikos-pkg-add` to self-heal missing dependencies. This is the main blocker
-  and it wants an upstream change in the MagikOS repo, not a packaging hack.
 - **`~/.config/magikos` is deliberately not managed.** It is per-user state —
   installed plugins, chosen theme, `shell.json`, and ~150M of wallpapers.
   Symlinking the packaged baseline over it would destroy all of it. Use the
