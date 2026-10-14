@@ -76,6 +76,7 @@
   programs.sway = {
     enable = true;
     wrapperFeatures.gtk = true;
+    xwayland.enable = true;
   };
 
   # XDG portals
@@ -145,12 +146,12 @@
     imagemagick feh imv
     # dev
     gcc clang cmake meson ninja scdoc pkg-config
-    python3 nodejs nodePackages.npm rustc cargo go lua luajit
+    python3 python3Packages.pip nodejs rustc cargo go lua luajit
     ripgrep fd jq yq
     # virtualisation
     qemu libvirt virt-manager
     # gaming
-    steam gamemode gamescope mangohud goverlay vulkan-tools vulkan-headers mesa-utils
+    steam gamemode gamescope mangohud goverlay vulkan-tools vulkan-headers mesa-demos
     # utils
     zip zstd xz gzip
     gum fzf zoxide lsd eza bat tree
@@ -170,5 +171,5 @@
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.auto-optimise-store = true;
 
-  system.stateVersion = "24.11";
+  system.stateVersion = "26.11";
 }
