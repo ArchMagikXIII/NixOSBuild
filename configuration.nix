@@ -154,7 +154,7 @@
   # Fonts
   fonts.packages = with pkgs; [
     noto-fonts noto-fonts-cjk-sans noto-fonts-color-emoji
-    dejavu_fonts liberation_ttf jetbrains-mono
+    dejavu_fonts liberation_ttf nerd-fonts.jetbrains-mono
     font-awesome
   ];
   fonts.fontconfig.enable = true;
