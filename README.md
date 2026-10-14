@@ -19,6 +19,35 @@ NixOS configuration generated from an existing CachyOS/MagikOS machine.
    sudo nixos-rebuild switch --flake .#cachyos-x8664
    ```
 
+## Hosts
+
+This flake exposes two hosts. They share `configuration.nix` (desktop, packages,
+services) but have completely separate hardware profiles.
+
+| Host | Profile | Disk layout | Bootloader |
+|---|---|---|---|
+| `cachyos-x8664` | `hardware-configuration.nix` | btrfs subvolumes, separate vfat `/boot` | systemd-boot (UEFI) |
+| `vm` | `hosts/vm.nix` | single ext4 `/`, no `/boot` | none — booted via QEMU `-kernel`/`-initrd` |
+
+Build them by suffix:
+
+```bash
+sudo nixos-rebuild switch --flake .#cachyos-x8664   # real machine
+sudo nixos-rebuild switch --flake .#vm              # QEMU test VM
+```
+
+The `vm` host is a disposable QEMU guest: it has no EFI system partition, so
+*no* bootloader is installed. It also autologins into Sway, since
+`configuration.nix` intentionally sets no user password. Recreate it from the
+QEMU command line with:
+
+```bash
+-kernel /nix/store/*-nixos-system-vm-*/kernel-modules/lib/modules/*/vmlinuz \
+-initrd /nix/store/*-nixos-system-vm-*/initrd \
+-append "init=/nix/store/*-nixos-system-vm-*/init" \
+-drive file=vm.qcow2,if=virtio
+```
+
 ## Fresh NixOS install
 
 1. Boot the NixOS ISO and install a minimal system.

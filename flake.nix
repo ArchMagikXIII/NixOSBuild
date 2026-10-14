@@ -13,5 +13,14 @@
         ./configuration.nix
       ];
     };
+
+    # Disposable QEMU test VM: different disks, no EFI partition, no bootloader.
+    # Shares the desktop config with the real machine but has its own hardware.
+    nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./hosts/vm.nix
+      ];
+    };
   };
 }
