@@ -165,5 +165,3 @@
 
   system.stateVersion = "24.11";
 }
-EOF
-echo done
