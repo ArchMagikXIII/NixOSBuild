@@ -10,6 +10,7 @@ ported from an existing CachyOS/MagikOS machine.
 | `flake.nix` | Two NixOS hosts + a standalone Home Manager config |
 | `nix/magikos.nix` | Packages MagikOS from the upstream git repo into the store |
 | `nix/module.nix` | NixOS integration: systemd user units, sudo rules, `MAGIKOS_PATH` |
+| `patches/` | Changes carried against upstream MagikOS, rather than vendored |
 | `hosts/home.nix` | Home Manager dotfiles, sourced from the packaged config tree |
 | `hosts/vm.nix` | QEMU test-VM hardware profile |
 | `hardware-configuration.nix` | Real-machine disks (btrfs subvolumes, UEFI `/boot`) |
@@ -37,8 +38,15 @@ things the Arch packaging got for free:
 images. `install/` and `installer/` are excluded as Arch-specific `pacman` and
 partitioning scripts.
 
-Pinned to MagikOS `8a38973a`. Bump `rev` and `hash` in `nix/magikos.nix` to
-track upstream.
+Pinned to MagikOS `49b1304`, with `patches/nix-pkg-backend.patch` applied on top.
+MagikOS `main` is deliberately left alone; the same change is pushed to the
+`nix-pkg-backend` branch and open upstream as a PR:
+
+```
+https://github.com/ArchMagikXIII/MagikOS/compare/main...nix-pkg-backend
+```
+
+Once it lands upstream, drop the `patches` line and bump `rev`/`hash`.
 
 ## Port status
 
@@ -52,8 +60,8 @@ Working:
 - Dotfiles deployed: `sway`, `alacritty`, `foot`, `kitty`, `ghostty`, `fish`,
   `fuzzel`, `wofi`, and the rest of `config/`
 
-Ported upstream (MagikOS `8a38973a`): `bin/magikos-pkg-backend` gained a Nix
-backend. Nix has no package database, so `pkg_installed` answers from the profile
+Ported via `patches/nix-pkg-backend.patch`: `bin/magikos-pkg-backend` gained a
+Nix backend. Nix has no package database, so `pkg_installed` answers from the profile
 closure -- snapshotted once into a cache keyed on the profile generation, then
 grepped by attribute name. A transaction that genuinely needs a package fails
 loudly and points at the flake instead of mutating the store, because installing

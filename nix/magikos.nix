@@ -110,11 +110,16 @@ stdenvNoCC.mkDerivation {
 
   src = fetchgit {
     url = "https://github.com/ArchMagikXIII/MagikOS.git";
-    # Pinned to the last pushed commit. The local checkout has 3 newer commits
-    # that are not on GitHub yet; bump this once they are pushed.
-    rev = "8a38973a52ef99150f369354352373450e43cc6d";
-    hash = "sha256-BgrqmrwKIso5SgaCqBIIREJzoYN8ug0DqC0Sa7RW8ZI=";
+    rev = "49b13047d6877fc9cad4de023824f9c7d9626f3d";
+    hash = "sha256-Fsn1tpxWr/O3p2ldUUuOUAi7Exdx5z2cYhEjChE9As8=";
   };
+
+  # Adds a Nix backend to bin/magikos-pkg-backend, which otherwise aborts with
+  # "requires an Arch/CachyOS or Debian system" and takes out the ~60 scripts
+  # that call magikos-pkg-add to self-heal. Carried here rather than vendored
+  # into the MagikOS repository so this port stays self-contained; the same
+  # change is open upstream as a PR.
+  patches = [ ../patches/nix-pkg-backend.patch ];
 
   dontBuild = true;
 
@@ -132,8 +137,8 @@ stdenvNoCC.mkDerivation {
     for dir in bin shell themes wallpapers config default applications \
                 manual docs agents plans migrations \
                 icon.png icon.txt logo.svg logo.txt version; do
-      if [ -e "$src/$dir" ]; then
-        cp -r "$src/$dir" "$magikosDir/"
+      if [ -e "./$dir" ]; then
+        cp -r "./$dir" "$magikosDir/"
       fi
     done
 
