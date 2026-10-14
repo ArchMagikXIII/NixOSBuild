@@ -32,3 +32,6 @@ NixOS configuration generated from an existing CachyOS/MagikOS machine.
 - This uses `nixos-unstable` and flakes; ensure flakes are enabled (`experimental-features = nix-command flakes`).
 - Source-system (CachyOS/MagikOS) packages not available in nixpkgs were omitted. See `packages-arch.txt` for the original Arch package list.
 - MagikOS/sway dotfiles are not managed by this repo yet.
+- **Login/password:** `users.users.magikxiii` in `configuration.nix` sets no password. On an existing install the
+  current password is preserved, but on a *fresh* install the account is created locked. Set one with
+  `sudo passwd magikxiii` (or add `hashedPassword`/`initialPassword` locally) or you will not be able to log in.

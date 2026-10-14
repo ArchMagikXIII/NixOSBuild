@@ -65,6 +65,13 @@
   services.ollama.enable = true;
 
   # Display manager + WM
+  # SDDM asserts that either services.xserver.enable or the experimental
+  # sddm.wayland.enable is true. Enable the xserver module (this also provides
+  # XWayland, which Sway needs for X11 apps) instead of the weston/kwin greeter.
+  services.xserver = {
+    enable = true;
+    xkb.layout = "us";
+  };
   services.displayManager.sddm.enable = true;
   programs.sway = {
     enable = true;
