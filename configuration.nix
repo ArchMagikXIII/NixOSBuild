@@ -1,6 +1,10 @@
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 {
+  imports = [ ./nix/module.nix ];
+
+  magikos.enable = true;
+
   # Host
   networking.hostName = "cachyos-x8664";
 
