@@ -36,6 +36,7 @@
   xdg-user-dirs,
   fontconfig,
   gnupg,
+  libxkbcommon,
   curl,
   git,
   libnotify,
@@ -88,6 +89,8 @@
     xdg-user-dirs
     fontconfig
     gnupg
+    libxkbcommon
+    nautilus
     curl
     git
     libnotify
