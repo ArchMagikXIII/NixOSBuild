@@ -187,10 +187,13 @@ The simplest way to run it is `system.build.vm`, which needs no disk at all:
 nix run .#nixosConfigurations.vm.config.system.build.vm
 ```
 
-Note that the generated runner hardcodes 1G of RAM, one vCPU and *no* GPU
-device, and Sway needs a DRM render node. To get a usable desktop, copy the
-runner out of the store and change `-m 1024` to something larger and add
-`-device virtio-gpu-pci` before running it. Recreating it by hand instead:
+Note that `hosts/vm.nix` sets `virtualisation.vmVariant`, not the outer
+`virtualisation` options: this nixpkgs builds `system.build.vm` from a separate
+module evaluation that pulls in `qemu-vm.nix`, so `memorySize`, `cores` and
+`qemu.options` only exist *inside* `vmVariant`. The defaults are 1024 MiB, one
+vCPU and no GPU, which reaches a serial console but not a desktop -- Sway's DRM
+backend needs a render node. The repo sets 8 GiB, 4 vCPU and a `virtio-gpu-pci`
+so the stock runner is usable as-is. Recreating it by hand instead:
 
 ```bash
 -kernel /nix/store/*-nixos-system-vm-*/kernel-modules/lib/modules/*/vmlinuz \

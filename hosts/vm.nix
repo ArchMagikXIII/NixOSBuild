@@ -62,4 +62,19 @@
   # --autologin bypasses the password check, so this needs no password, and it
   # only ever runs on this throwaway guest.
   services.getty.autologinUser = "magikxiii";
+
+  # `system.build.vm` is built from `virtualisation.vmVariant`, which is a
+  # separate module evaluation that pulls in qemu-vm.nix -- so the QEMU knobs
+  # (memorySize, cores, qemu.options) only exist *inside* vmVariant, not in this
+  # configuration. Set them here or they stay at qemu-vm.nix's defaults.
+  #
+  # The defaults are 1024 MiB, 1 vCPU and no GPU at all, which is enough to
+  # reach a serial console but not a desktop: Sway's DRM backend needs a render
+  # node, so with no GPU device the session never comes up and the guest looks
+  # dead. virtio-gpu is what provides that node under QEMU.
+  virtualisation.vmVariant = {
+    virtualisation.memorySize = 8192;
+    virtualisation.cores = 4;
+    virtualisation.qemu.options = [ "-device" "virtio-gpu-pci" ];
+  };
 }
