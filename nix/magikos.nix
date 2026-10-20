@@ -189,8 +189,12 @@ stdenvNoCC.mkDerivation {
     for f in "$magikosDir"/bin/*; do
       [ -f "$f" ] || continue
       name=$(basename "$f")
+      # An absolute store path, not `#!/usr/bin/env bash`: /usr/bin/env does not
+      # exist on NixOS, so an env-based shebang makes every one of these exit
+      # 127. The inner script's own shebang was rewritten to the same path
+      # above, so `exec "$f"` resolves too.
       cat > "$out/bin/$name" <<EOF
-    #!/usr/bin/env bash
+    #!${bash}/bin/bash
     export MAGIKOS_PATH="$magikosDir"
     export PATH="$depPath:\$PATH"
     exec "$f" "\$@"
@@ -207,5 +211,14 @@ stdenvNoCC.mkDerivation {
     homepage = "https://github.com/ArchMagikXIII/MagikOS";
     license = lib.licenses.mit;
     platforms = lib.platforms.linux;
+  };
+
+  # The wrapper scripts put runtimeDeps on PATH for their own children, but
+  # nothing inherits that: sway's `exec_always` lines and the QuickShell
+  # `Process` calls name tools directly (`exec quickshell ...`), which fails
+  # with "quickshell: not found" unless the tools are in the system profile.
+  # Exposed so nix/module.nix can install them.
+  passthru = {
+    inherit runtimeDeps;
   };
 }

@@ -51,4 +51,15 @@
   };
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+
+  # Not "cachyos-x8664": the shared configuration.nix no longer hardcodes a
+  # name, so each hardware profile owns its own.
+  networking.hostName = "magikos-vm";
+
+  # Console access for debugging. `configuration.nix` deliberately sets no
+  # password for the user, which leaves the account locked, so without this
+  # there is no way into a serial console to diagnose a failed boot. agetty's
+  # --autologin bypasses the password check, so this needs no password, and it
+  # only ever runs on this throwaway guest.
+  services.getty.autologinUser = "magikxiii";
 }

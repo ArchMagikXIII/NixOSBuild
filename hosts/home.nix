@@ -63,10 +63,30 @@ in
     home.homeDirectory = lib.mkDefault "/home/magikxiii";
     home.stateVersion = lib.mkDefault "26.11";
 
-    # Sway's include list is written with an explicit ~/.config/sway/... path
-    # per file, so the tree has to exist before the compositor reads it.
+    # Only the state directory is pre-created. ~/.config/sway deliberately is
+    # not: `xdg.configFile` links the whole packaged sway tree as a *single*
+    # symlink, so a real directory sitting in the way makes linkGeneration fail
+    # with "cannot overwrite directory" and the entire activation aborts. The
+    # symlink is in place before any session starts, which is all Sway needs.
     home.activation.createConfigDirs = lib.mkBefore ''
-        mkdir -p "$HOME/.config/sway" "$HOME/.local/state/magikos/toggles"
+        mkdir -p "$HOME/.local/state/magikos/toggles"
+
+        # ~/.config/magikos is seeded rather than linked. Linking the packaged
+        # tree over it is what skipFromPackage deliberately avoids: it is
+        # per-user state -- installed plugins, chosen theme, shell.json layout,
+        # wallpapers -- and a symlink would make all of it read-only in the
+        # store and destroy the rest on first activation.
+        #
+        # But not seeding it at all is just as broken: on a fresh install the
+        # directory never exists, and the QuickShell bar launched from sway's
+        # autostart.conf comes up against a missing config and exits. So copy
+        # the packaged baseline in exactly once and never touch it again. After
+        # this runs the directory is user-owned, matching the Arch layout.
+        if [ ! -e "$HOME/.config/magikos" ]; then
+          mkdir -p "$HOME/.config"
+          cp -r "${magikosConfig}/magikos" "$HOME/.config/magikos"
+          chmod -R u+w "$HOME/.config/magikos"
+        fi
     '';
 
     xdg.configFile = packagedConfig // localOverrides;

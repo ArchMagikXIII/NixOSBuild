@@ -3,6 +3,9 @@
 {
   imports = [ ];
 
+  # Host
+  networking.hostName = "cachyos-x8664";
+
   # Boot vfat EFI partition
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/8DF5-4E58";
@@ -78,4 +81,8 @@
 
   # Allow btrfs + exfat
   boot.supportedFilesystems = [ "btrfs" "exfat" ];
+
+  # Snapshot the root subvolume for pre-update recovery. Only meaningful here:
+  # the root below is btrfs, whereas the QEMU guest's root is ext4.
+  magikos.snapper.enable = true;
 }

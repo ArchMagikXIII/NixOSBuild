@@ -5,6 +5,38 @@ let
   magikos = cfg.package;
   magikosPath = "${magikos}/share/magikos";
   bin = name: "${magikos}/bin/${name}";
+
+  # Recovers WAYLAND_DISPLAY from the running compositor and imports it into the
+  # systemd user manager. See magikos-session-env below for why that is needed.
+  sessionEnvScript = pkgs.writeShellApplication {
+    name = "magikos-session-env";
+    text = ''
+      display=""
+      for _ in $(seq 1 120); do
+        for env in /proc/[0-9]*/environ; do
+          if [ -r "$env" ]; then
+            match=$(tr '\0' '\n' <"$env" 2>/dev/null | grep -m1 '^WAYLAND_DISPLAY=' || true)
+            if [ -n "$match" ]; then
+              display=''${match#WAYLAND_DISPLAY=}
+              break
+            fi
+          fi
+        done
+        if [ -n "$display" ]; then
+          break
+        fi
+        sleep 0.5
+      done
+
+      if [ -n "$display" ]; then
+        WAYLAND_DISPLAY="$display" systemctl --user import-environment WAYLAND_DISPLAY
+      fi
+      # Best effort: any of these may legitimately refuse to start (no bluetooth
+      # adapter, another instance owns the bus name), and none of them should
+      # hold up the rest of the session.
+      systemctl --user start magikos-crash-watch magikos-fcitx5 magikos-sleep-lock || true
+    '';
+  };
 in
 {
   options.magikos = {
@@ -38,10 +70,18 @@ in
   config = lib.mkIf cfg.enable {
     # All ~417 magikos-* commands land on PATH via the package wrappers, which
     # also export MAGIKOS_PATH and the runtime dependency closure.
+    #
+    # The runtime deps are installed system-wide as well, not just referenced by
+    # the wrappers. sway's autostart runs `exec quickshell -p $MAGIKOS_PATH/shell`
+    # directly rather than through a wrapper, so without these on the system
+    # PATH the bar never comes up and the only symptom is
+    # "exec: quickshell: not found" in ~/.local/state/magikos/quickshell.log.
     environment.systemPackages = [
       magikos
       pkgs.fcitx5
-    ] ++ lib.optional cfg.tailscale.enable cfg.tailscale.package;
+    ]
+    ++ magikos.runtimeDeps
+    ++ lib.optional cfg.tailscale.enable cfg.tailscale.package;
 
     # The 65 scripts that read MAGIKOS_PATH default it to /usr/share/magikos.
     # Sessions that never touch the wrappers (systemd units, quickshell's own
@@ -87,7 +127,38 @@ in
     # These are ported from default/systemd/user/*.service rather than copied
     # verbatim: the Arch files hardcode /usr/bin/magikos-*, which does not
     # exist in a Nix closure, so each ExecStart points into the store instead.
+    #
+    # The ones that already gate on WAYLAND_DISPLAY/MAGIKOS_PATH are wanted by
+    # default.target as well as graphical-session.target, because SDDM starts
+    # sessions through its own wayland-session script rather than uwsm and so
+    # never activates graphical-session.target -- see magikos-session-env
+    # below. The rest -- speaker-tuning and the bluetooth agent -- deliberately
+    # stay on graphical-session.target alone: speaker-tuning is partOf
+    # pipewire.service and would race the session's own pipewire if it started
+    # outside one.
     systemd.user.services = lib.mkIf cfg.userUnits {
+
+      # SDDM starts sessions through its own wayland-session script rather than
+      # uwsm, and logind has already built the session environment by the time
+      # the compositor sets WAYLAND_DISPLAY. So the user manager never sees it,
+      # and every unit below that gates on ConditionEnvironment=WAYLAND_DISPLAY
+      # is skipped for the whole session and stays inactive -- no bar gap, no
+      # crash notifications, no lock-on-suspend, and no input method.
+      #
+      # Recover the variable from the running compositor's own environment and
+      # import it, then start those units by hand. The compositor is up long
+      # before this loop gives up, so in practice it resolves on the first
+      # few passes; the timeout only bounds the pathological case.
+      magikos-session-env = {
+        description = "Import WAYLAND_DISPLAY from the compositor into the user manager";
+        wantedBy = [ "default.target" ];
+        after = [ "dbus.socket" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${sessionEnvScript}/bin/magikos-session-env";
+        };
+      };
 
       bt-agent = {
         description = "Bluetooth pairing agent (auto-accept)";
@@ -118,7 +189,7 @@ in
           Restart = "always";
           RestartSec = 5;
         };
-        wantedBy = [ "graphical-session.target" ];
+        wantedBy = [ "graphical-session.target" "default.target" ];
       };
 
       magikos-fcitx5 = {
@@ -134,7 +205,7 @@ in
           Restart = "always";
           RestartSec = 2;
         };
-        wantedBy = [ "graphical-session.target" ];
+        wantedBy = [ "graphical-session.target" "default.target" ];
       };
 
       magikos-migrate-notify = {
@@ -171,7 +242,7 @@ in
           Restart = "always";
           RestartSec = 2;
         };
-        wantedBy = [ "graphical-session.target" ];
+        wantedBy = [ "graphical-session.target" "default.target" ];
       };
 
       magikos-speaker-tuning = {

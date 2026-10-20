@@ -1,12 +1,12 @@
 { config, lib, pkgs, ... }:
 
 {
-  imports = [ ./nix/module.nix ];
+  imports = [
+    ./nix/module.nix
+    ./nix/parity.nix
+  ];
 
   magikos.enable = true;
-
-  # Host
-  networking.hostName = "cachyos-x8664";
 
   # Bootloader (source used Limine; systemd-boot is the NixOS default that supports btrfs)
   boot.loader.systemd-boot.enable = true;
