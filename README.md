@@ -68,8 +68,8 @@ Working:
 - `systemctl --failed` reports nothing, in both the system and user managers
 - 8 MagikOS systemd *user* units ported to `systemd.user.services`
 - Sudo rules from `etc/sudoers.d` (note `%wheel` is a group, not a user list)
-- Dotfiles deployed: `sway`, `alacritty`, `foot`, `kitty`, `ghostty`, `fish`,
-  `fuzzel`, `wofi`, and the rest of `config/`
+- Dotfiles seeded into `~/.config`: `sway`, `alacritty`, `foot`, `kitty`,
+  `ghostty`, `fish`, `fuzzel`, `wofi`, and the rest of `config/`
 - Everything in `default/` and `/etc` that had a NixOS equivalent (see below)
 
 Ported via `patches/nix-pkg-backend.patch`: `bin/magikos-pkg-backend` gained a
@@ -103,13 +103,23 @@ copied verbatim -- the file is the index:
 | `/etc/snapper/configs/root` | `services.snapper.configs.root` |
 | `default/limine-entry-tool.d/*.conf` | `boot.kernelParams` |
 
-`~/.config/magikos` is **seeded, not managed.** It is per-user state --
-installed plugins, chosen theme, `shell.json` layout, ~150M of wallpapers --
-so symlinking the packaged tree over it would destroy all of it. But on a fresh
-install the directory would not exist at all and the QuickShell bar exits
-immediately against a missing config. `hosts/home.nix` therefore copies the
-packaged baseline in exactly once, guarded by `[ ! -e ... ]`, and never touches
-it again. Use the `dotfiles/` escape hatch if you want to version it.
+`~/.config` is **seeded, not symlinked.** The packaged tree is copied in as
+real, writable files, once, guarded by `[ ! -e ... ]`.
+
+Symlinking it into the store looks tempting and does not work: the store is
+read-only, and applications write inside their own config directories. fish
+cannot save universal variables, fcitx5 cannot write its profile, chromium
+cannot save `Preferences`, and opencode exits on startup writing
+`service-prod.json`. Linking the individual files instead of the directories
+only moves the problem, because anything that rewrites a file in place still
+gets `EROFS`.
+
+Copying is also what upstream does: MagikOS seeds `/etc/skel/.config` and never
+re-copies afterwards, keeping `share/magikos/config` as the resync source. The
+practical consequence is that edits to the packaged configs here do **not**
+propagate on rebuild -- delete `~/.config/<name>` to take the packaged version
+again. `./dotfiles/<name>` remains the versioned escape hatch, and is the one
+thing still symlinked, since it is authored in this repo rather than generated.
 
 ## Known deviations
 
