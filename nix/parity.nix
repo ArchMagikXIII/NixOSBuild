@@ -44,12 +44,19 @@ let
     cp -r "${magikosPath}/default/plymouth" "$out/share/plymouth/themes/magikos"
   '';
 
+  # The G435 rule runs a helper script, so it has to name a real path.
+  #
+  # The package points it at /etc/magikos, the stable symlink the rest of the
+  # tree uses, but udev verifies that every program a rule calls exists and is
+  # executable when the rules are installed -- and /etc/magikos does not exist
+  # yet at that point. The rule is rewritten to the concrete store path here.
   udevRules = pkgs.runCommand "magikos-udev-rules" { } ''
     mkdir -p "$out/lib/udev/rules.d"
     cp "${magikosPath}/default/udev/framework16-qmk-hid.rules" \
        "$out/lib/udev/rules.d/70-framework16-qmk-hid.rules"
-    cp "${magikosPath}/default/udev/70-magikos-g435-volume.rules" \
-       "$out/lib/udev/rules.d/70-magikos-g435-volume.rules"
+    sed "s|/etc/magikos|${magikosPath}|g" \
+      "${magikosPath}/default/udev/70-magikos-g435-volume.rules" \
+      > "$out/lib/udev/rules.d/70-magikos-g435-volume.rules"
   '';
 in
 {
@@ -172,6 +179,26 @@ in
       theme = "magikos";
       themePackages = [ plymouthTheme ];
     };
+
+    # --- SDDM waits for plymouth ------------------------------------------
+    #
+    # plymouth-quit.service finishes once plymouthd acknowledges the quit
+    # request, but the daemon lingers briefly while releasing DRM master. On
+    # fast boots SDDM autologin then launches sway while plymouthd still
+    # holds the GPU, and wlroots aborts with "Could not take device: Device or
+    # resource busy" -> black screen.
+    #
+    # Upstream ships this as
+    # etc/systemd/system/sddm.service.d/10-wait-for-plymouth.conf. The whole
+    # etc/ tree is dropped from the Nix package, so it is ported here as a
+    # native ExecStartPre.
+    #
+    # The leading "-" makes systemd ignore a failure, and pgrep is named by
+    # absolute path because a unit's PATH is the bare minimum.
+    systemd.services.sddm.serviceConfig.ExecStartPre =
+      lib.mkIf config.services.displayManager.sddm.enable [
+        "-${pkgs.bash}/bin/bash -c 'for (( i = 0; i < 100; i++ )); do if ! ${pkgs.procps}/bin/pgrep -x plymouthd > /dev/null; then break; fi; sleep 0.1; done'"
+      ];
 
     # --- Login theme -------------------------------------------------------
     #
