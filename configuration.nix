@@ -148,6 +148,9 @@
     # media
     mpv vlc ffmpeg gst_all_1.gst-libav gst_all_1.gst-plugins-bad gst_all_1.gst-plugins-ugly
     imagemagick feh imv
+    # dev tools
+    mise
+    opencode
     # dev
     gcc clang cmake meson ninja scdoc pkg-config
     python3 python3Packages.pip nodejs rustc cargo go lua luajit
