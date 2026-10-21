@@ -1,0 +1,19 @@
+# ==============================================================================
+# MagikOS Sway Configuration
+# ==============================================================================
+
+set $mod Mod4
+
+# Include order is load-bearing: a malformed line aborts the rest of the parse,
+# so anything that can fail on an unusual machine has to load before the files
+# whose absence actually breaks the session. appearance.conf goes last because
+# `output * bg <file>` is a hard error when the wallpaper is missing, and losing
+# the window rules or autostart to a missing JPEG is a far worse outcome than
+# losing the background.
+include ~/.config/sway/environment.conf
+include ~/.config/sway/input.conf
+include ~/.config/sway/output.conf
+include ~/.config/sway/bindings.conf
+include ~/.config/sway/windows.conf
+include ~/.config/sway/autostart.conf
+include ~/.config/sway/appearance.conf
