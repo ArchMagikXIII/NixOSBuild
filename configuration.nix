@@ -155,12 +155,38 @@
     brave chromium firefox
     # The MagikOS browser keybinding launches `brave-origin`, which on the
     # Arch system is the brave-origin-bin AUR package. There is no nixpkgs
-    # equivalent of that build, so the name is provided here as a shim over
-    # the stock brave package: the binding resolves here instead of failing
-    # with "command not found", and the window that opens is the same
-    # browser the rest of the system already has.
-    (pkgs.writeShellScriptBin "brave-origin" ''
+    # equivalent of that build, so the name is provided here over the stock
+    # brave package: the binding resolves here instead of failing with
+    # "command not found", and the window that opens is the same browser the
+    # rest of the system already has.
+    #
+    # It ships a desktop entry too, so that it is a browser in its own
+    # right rather than only a command: `magikos default browser
+    # brave-origin` writes brave-origin.desktop as the XDG default, and
+    # without the entry that default would name a file that does not exist.
+    (pkgs.runCommand "brave-origin" { } ''
+      mkdir -p "$out/bin" "$out/share/applications"
+
+      cat > "$out/bin/brave-origin" <<EOF
+      #!${pkgs.bash}/bin/bash
       exec ${pkgs.brave}/bin/brave "$@"
+      EOF
+      chmod +x "$out/bin/brave-origin"
+
+      cat > "$out/share/applications/brave-origin.desktop" <<EOF
+      [Desktop Entry]
+      Version=1.0
+      Name=Brave Origin
+      GenericName=Web Browser
+      Exec=brave-origin %U
+      Terminal=false
+      Type=Application
+      Icon=brave-browser
+      Categories=Network;WebBrowser;
+      MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+      StartupWMClass=Brave
+      Keywords=web;browser;internet;
+      EOF
     '')
     # media
     mpv vlc ffmpeg gst_all_1.gst-libav gst_all_1.gst-plugins-bad gst_all_1.gst-plugins-ugly
