@@ -49,6 +49,11 @@
     enable = true;
     user = "magikxiii";
   };
+  # Log straight back in when a session ends. Without it SDDM drops to the
+  # greeter and waits, which is the wrong behaviour for a disposable guest
+  # that is meant to come back on its own after a config change or a
+  # restart of the compositor.
+  services.displayManager.sddm.autoLogin.relogin = true;
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
