@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Re-apply the MagikOS VM profile and bring the desktop back up.
+#
+# The guest is booted with an init named on the kernel command line, so a
+# guest that comes up on the wrong profile has that profile's /etc: no
+# /etc/magikos symlink, no /etc/environment.d, no magikos-session-env unit,
+# and a bar that cannot find its configuration at all. The profile the guest
+# is supposed to be running is applied here, and the shell is restarted so
+# the bar comes back on it.
+#
+# This is the guest-side half of the fix. The other half is on the host
+# that launches the VM: the kernel command line has to name the vm
+# profile's init, or the next reboot lands here again. See README.md.
+
+set -euo pipefail
+
+FLAKE=${MAGIKOS_VM_FLAKE:-$HOME/Projects/NixOSBuild}
+PROFILE=${MAGIKOS_VM_PROFILE:-vm}
+
+if [[ ! -d $FLAKE ]]; then
+  cat >&2 <<EOF
+The flake is not at $FLAKE.
+
+Set MAGIKOS_VM_FLAKE to the checkout of this repository that the guest was
+built from, for example:
+
+  MAGIKOS_VM_FLAKE=/home/you/NixOSBuild magikos-vm-sync
+EOF
+  exit 1
+fi
+
+booted=$(basename "$(readlink /run/current-system)" 2>/dev/null || echo unknown)
+echo "==> booted profile: $booted"
+
+echo "==> applying the $PROFILE profile from $FLAKE"
+sudo nixos-rebuild switch --flake "$FLAKE#$PROFILE"
+
+# The session that is running right now was started from the old profile's
+# environment, so the user manager still carries the old MAGIKOS_PATH. The
+# new one has to be handed over before the shell is restarted, or the bar
+# comes back on the old build.
+if [[ -d /etc/magikos ]]; then
+  MAGIKOS_PATH=/etc/magikos systemctl --user import-environment MAGIKOS_PATH
+fi
+
+echo "==> restarting the desktop shell"
+if command -v magikos-restart-shell >/dev/null 2>&1; then
+  MAGIKOS_PATH=/etc/magikos magikos-restart-shell || true
+else
+  swaymsg reload >/dev/null 2>&1 || true
+fi
+
+echo
+echo "==> state"
+echo "    profile:  $(readlink /run/current-system)"
+echo "    bar:      $(pgrep -a quickshell 2>/dev/null | head -1 || echo 'not running')"
+echo "    targets:  $(systemctl --user is-active graphical-session.target sway-session.target xdg-desktop-portal.service 2>/dev/null | tr '\n' ' ')"

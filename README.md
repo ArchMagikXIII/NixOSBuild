@@ -234,6 +234,59 @@ renders straight to DRM and never touches the virtual console, so the monitor
 has nothing to capture. Check the session from inside instead --
 `pgrep -c quickshell` and `systemctl --failed` are the useful ones.
 
+### The init on the kernel command line decides which profile you get
+
+The guest has no bootloader, so the `init=` on the kernel command line is
+what it boots. It has to name the init of the **same build** the kernel and
+initrd came from, or the guest comes up on one profile's kernel and another
+profile's `/etc`.
+
+This bites in a way that is easy to misread. The `vm` profile has no
+bootloader and no `/boot` partition, so nothing inside the guest can change
+what it boots -- the kernel command line comes from whatever launched the
+VM. Launch it with a stale init and the guest lands on the old profile:
+
+```
+$ readlink /run/current-system
+/nix/store/...-nixos-system-cachyos-x8664-...
+```
+
+and everything that the current profile owns is missing. There is no
+`/etc/magikos` symlink, so the bar cannot find its configuration at all:
+
+```
+Could not open config file at "/etc/magikos/shell"
+```
+
+`nixos-rebuild switch` does not help across a reboot, because the reboot
+replaces `/etc` with the booted profile's copy. So the fix is on the side
+that launches the VM: use the runner, or point the three paths at one
+build.
+
+```bash
+# the runner, which keeps the three in step
+nix run .#nixosConfigurations.vm.config.system.build.vm
+
+# or by hand, from one build
+build=$(nix build .#nixosConfigurations.vm.config.system.build.toplevel --no-link --print-out-paths)
+qemu-system-x86_64 \
+  -kernel "$build"/kernel-modules/lib/modules/*/vmlinuz \
+  -initrd "$build"/initrd \
+  -append "init=$build/init" \
+  -device virtio-gpu-pci \
+  -drive file=vm.qcow2,if=virtio
+```
+
+Check which profile a guest is on with `readlink /run/current-system`. If it
+is not the one it should be, `magikos-vm-sync` re-applies the intended
+profile and restarts the shell; it lives in `~/.local/bin` rather than the
+system profile precisely so that it is still there on a guest that booted the
+wrong one.
+
+```bash
+magikos-vm-sync
+```
+
 ## Fresh NixOS install
 
 1. Boot the NixOS ISO and install a minimal system.

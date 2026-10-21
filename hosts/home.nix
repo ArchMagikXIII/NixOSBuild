@@ -105,6 +105,17 @@ in
         done
       '';
 
+    # The guest-side recovery script goes into ~/.local/bin rather than the
+    # system profile, because ~/.local/bin survives a boot onto the wrong
+    # profile: the system profile is rebuilt from whatever was booted, so a
+    # script that only existed in the intended profile would be gone exactly
+    # when it is needed.
+    home.activation.installVmSync =
+      lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        mkdir -p "$HOME/.local/bin"
+        install -Dm755 ${../bin/magikos-vm-sync} "$HOME/.local/bin/magikos-vm-sync"
+      '';
+
     # Symlink the dotfiles into ~/.config.
     #
     # Runs after linkGeneration so it wins over anything the seeding above
