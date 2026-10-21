@@ -137,9 +137,20 @@ stdenvNoCC.mkDerivation {
   # out of the checkout rather than the installed wrapper, because the
   # wrapper pins MAGIKOS_PATH to the package and the test is about what
   # happens when no package is installed at all.
+  # magikos-upstream-fixes.patch carries three fixes that are committed
+  # upstream but not yet in the pinned revision this package builds from:
+  # the missing metadata summaries on the two OpenRC commands, the command
+  # helpers replacing raw `command -v`, and quickshell's --no-duplicate flag
+  # on the sway autostart. Without them the package ships a tree whose own
+  # `magikos commands --check` fails, and a sway reload starts a second bar.
+  #
+  # It is carried here so the port builds the same thing from a pinned
+  # upstream revision, rather than depending on a revision that does not
+  # exist yet. Drop it and bump rev/hash once the fixes are upstream.
   patches = [
     ../patches/nix-pkg-backend.patch
     ../patches/nix-test-paths.patch
+    ../patches/magikos-upstream-fixes.patch
   ];
 
   dontBuild = true;

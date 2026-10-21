@@ -50,17 +50,18 @@ in
 
     dotfilesPath = lib.mkOption {
       type = lib.types.str;
-      default = "$HOME/Projects/NixOSBuild/hosts/dotfiles";
+      default = "$HOME/Projects/*/hosts/dotfiles";
       description = ''
         The directory the dotfiles are symlinked from.
 
         The default points at the live checkout of this repository, so an edit
         takes effect as soon as it is saved and shows up in `git diff` here
-        rather than living only on the machine. $HOME is expanded by the
-        activation script, so the path is not tied to one account. Point it
-        elsewhere if the checkout lives somewhere else; when the directory is
-        not there the packaged copy is used instead, so the session still
-        comes up.
+        rather than living only on the machine. $HOME and the glob are
+        expanded by the activation script, so the path is not tied to one
+        account and a checkout in another directory under ~/Projects is
+        found too. Point it elsewhere if the checkout lives somewhere else;
+        when no candidate is there the packaged copy is used instead, so the
+        session still comes up.
       '';
     };
   };
@@ -135,12 +136,17 @@ in
           # edit is live as soon as it is saved, and it is version-controlled
           # here at the same time.
           source=""
-          for candidate in "${cfg.dotfilesPath}/$entry" "${dotfilesDir}/$entry"; do
-            if [ -d "$candidate" ]; then
-              source="$candidate"
-              break
-            fi
+          for pattern in ${cfg.dotfilesPath}; do
+            for candidate in $pattern; do
+              if [ -d "$candidate/$entry" ]; then
+                source="$candidate/$entry"
+                break 2
+              fi
+            done
           done
+          if [ -z "$source" ] && [ -d "${dotfilesDir}/$entry" ]; then
+            source="${dotfilesDir}/$entry"
+          fi
           [ -n "$source" ] || continue
 
           if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
