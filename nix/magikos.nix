@@ -219,7 +219,39 @@ stdenvNoCC.mkDerivation {
         -e 's|/usr/bin/uwsm-app|uwsm-app|g' \
         -e 's|/usr/bin/xdg-terminal-exec|xdg-terminal-exec|g'
 
-    # 4. magikos-dns re-invokes itself as root, through the path the sudo
+    # 4. The sway config resolves MAGIKOS_PATH from the environment, falling
+    #    back to the packaged root. On the Arch system that fallback is
+    #    /usr/share/magikos and the environment is not set, so the fallback is
+    #    what is used. Here the environment *is* set, by /etc/set-environment,
+    #    and it wins -- so the value that reaches the bar is whatever the
+    #    session happened to start with. A session that began before the
+    #    environment was corrected keeps the old store path, and the bar then
+    #    reads its plugins from a build that is no longer current.
+    #
+    #    The sway config is the one place that should not depend on the
+    #    session environment at all: it is the compositor's own config, and the
+    #    compositor is what the environment describes. Naming the root
+    #    directly makes the config self-contained, so a stale environment
+    #    cannot reintroduce the split.
+    #
+    #    Only the sway config is rewritten. The bin scripts keep the
+    #    environment-first form, because the package wrappers set
+    #    MAGIKOS_PATH to the precise store path and that is what they should
+    #    use.
+    grep -rIl 'export MAGIKOS_PATH="''${MAGIKOS_PATH:-/etc/magikos}"' "$magikosDir/config/sway" 2>/dev/null \
+      | xargs -r sed -i \
+        's|export MAGIKOS_PATH="''${MAGIKOS_PATH:-/etc/magikos}"|export MAGIKOS_PATH=/etc/magikos|g'
+
+    # 5. The sway autostart starts the bar with quickshell's --no-duplicate
+    #    flag. The flag means "exit immediately if another instance of the
+    #    given config is already running", and without it a sway reload --
+    #    which re-runs the autostart line -- starts a second bar next to the
+    #    one the shell's own supervisor is holding. The supervisor already
+    #    uses the flag, so with it on both sides a reload leaves the desktop
+    #    as it found it.
+    sed -i 's|exec quickshell -p |exec quickshell -n -p |g' "$magikosDir/config/sway/autostart.conf"
+
+    # 6. magikos-dns re-invokes itself as root, through the path the sudo
     #    rule grants. It hardcodes /usr/bin/magikos-dns, which is the Arch
     #    install path; here the rule names the wrapper in this package's
     #    output, so the hardcoded path has to become that or the re-exec
@@ -257,7 +289,21 @@ stdenvNoCC.mkDerivation {
       # construction -- the non-executable ones were copied verbatim above.
       cat > "$out/bin/$name" <<EOF
     #!${bash}/bin/bash
-    export MAGIKOS_PATH="$magikosDir"
+    # /etc/magikos is the stable symlink to this package that the NixOS
+    # configuration maintains. It is preferred over the store path so that
+    # everything names the same root: the wrappers, the sway config and the
+    # shell. That matters for quickshell, which refuses to start a second
+    # instance for a path that is already in use -- with two different roots
+    # the sway autostart and the shell's own supervisor each start one, and
+    # the desktop ends up with two bars.
+    #
+    # The store path is the fallback so the package still works on its own,
+    # outside the configuration that provides the symlink.
+    if [ -d /etc/magikos ]; then
+      export MAGIKOS_PATH="/etc/magikos"
+    else
+      export MAGIKOS_PATH="$magikosDir"
+    fi
     export PATH="$depPath:\$PATH"
     exec "$f" "\$@"
     EOF
