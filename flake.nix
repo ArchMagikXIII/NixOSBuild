@@ -12,6 +12,8 @@
 
   outputs = { self, nixpkgs, home-manager }:
     let
+      system = "x86_64-linux";
+
       magikosOverlay = final: prev: {
         magikos = final.callPackage ./nix/magikos.nix { };
       };
@@ -95,5 +97,91 @@
         pkgs = nixpkgs.legacyPackages.x86_64-linux.extend magikosOverlay;
         modules = [ homeModule ];
       };
+
+      # A build-time check on the packaged MagikOS tree.
+      #
+      # There is no other verification in this repo: `nix flake check` used to
+      # evaluate cleanly while the package shipped seven scripts with a
+      # #!/bin/bash shebang that could not execute, and while the config tree
+      # baked in a store path that pointed at a stale build. Both are silent
+      # failures at runtime -- a broken clipboard plugin, a suspend hook that
+      # never runs -- so they are caught here instead.
+      checks.${system}.magikos-package = let
+        pkgs = nixpkgs.legacyPackages.${system};
+        magikos = (pkgs.extend magikosOverlay).magikos;
+      in
+      pkgs.runCommand "magikos-package-check" { } ''
+        tree="${magikos}/share/magikos"
+        failed=0
+
+        # 1. Every shebang in the tree must name an interpreter that exists.
+        #    The package rewrites the ones on line 1 to absolute store paths;
+        #    anything left pointing at /usr/bin/python3 cannot run on NixOS.
+        #
+        #    Scripts also embed shebangs in heredocs -- magikos-mise-install
+        #    writes a wrapper into ~/.local/bin that way -- so every line
+        #    that starts with "#!" is checked, not just the first.
+        #
+        #    /bin/bash and /bin/sh are the exception: NixOS does not provide
+        #    them, but the configuration creates /bin/bash through
+        #    system.activationScripts.binbash, so a script that relies on
+        #    them does run here.
+        while IFS= read -r f; do
+          while IFS= read -r interp; do
+            interp=''${interp#\#!}
+            interp=''${interp%% *}
+            case "$interp" in
+              /bin/bash|/bin/sh)
+                ;;
+              /*)
+                if [ ! -x "$interp" ]; then
+                  echo "shebang interpreter does not exist: $f -> $interp" >&2
+                  failed=1
+                fi
+                ;;
+            esac
+          done < <(grep -h '^#!' "$f" || true)
+        done < <(find "$tree" -type f ! -name '*.md' -print0 | xargs -0 -r grep -lI '^#!')
+
+        # 2. Every wrapper must exec a script that is actually there, and
+        #    that script has to be executable -- a wrapper around a
+        #    non-executable file dies with "Permission denied".
+        for w in "${magikos}"/bin/*; do
+          target=$(sed -n 's|^exec "\(.*\)" "\$@"$|\1|p' "$w")
+          [ -n "$target" ] || continue
+          if [ ! -f "$target" ]; then
+            echo "wrapper points at a missing script: $w -> $target" >&2
+            failed=1
+          elif [ ! -x "$target" ]; then
+            echo "wrapper points at a non-executable script: $w -> $target" >&2
+            failed=1
+          fi
+        done
+
+        # 3. The config tree must not bake in a store path. Those references
+        #    are copied into ~/.config, where a store path goes stale -- or
+        #    gets garbage collected -- as soon as the package is rebuilt.
+        #    Shebangs are exempt: they are rewritten to an absolute interpreter
+        #    on purpose, and have to stay that way to be executable.
+        stale=$(grep -rIn -e "${builtins.storeDir}" "$tree/config" 2>/dev/null | grep -v ':[0-9]*:#!' || true)
+        if [ -n "$stale" ]; then
+          echo "config tree references a store path; it will go stale" >&2
+          echo "$stale" >&2
+          failed=1
+        fi
+
+        # 4. Nothing may still name the Arch install root, which does not
+        #    exist here.
+        if grep -rIl "/usr/share/magikos" "$tree" >/dev/null 2>&1; then
+          echo "tree still references the Arch install root /usr/share/magikos" >&2
+          failed=1
+        fi
+
+        if [ "$failed" -ne 0 ]; then
+          exit 1
+        fi
+        echo "magikos package check passed"
+        touch $out
+      '';
     };
 }
