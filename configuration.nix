@@ -114,6 +114,14 @@
   # Polkit
   security.polkit.enable = true;
 
+  # The account below is created without a password, so sudo must not ask for
+  # one. nixpkgs defaults security.sudo.wheelNeedsPassword to true, which
+  # would leave every privileged operation -- nixos-rebuild, mounting disks,
+  # running the MagikOS pkg backend -- asking for a password that cannot be
+  # entered. The previous /etc/sudoers carried a passwordless wheel rule
+  # that this configuration did not generate, so a rebuild silently dropped it.
+  security.sudo.wheelNeedsPassword = false;
+
   # ssh
   services.openssh.enable = true;
 
@@ -145,6 +153,15 @@
     fastfetch btop glances mission-center
     # web
     brave chromium firefox
+    # The MagikOS browser keybinding launches `brave-origin`, which on the
+    # Arch system is the brave-origin-bin AUR package. There is no nixpkgs
+    # equivalent of that build, so the name is provided here as a shim over
+    # the stock brave package: the binding resolves here instead of failing
+    # with "command not found", and the window that opens is the same
+    # browser the rest of the system already has.
+    (pkgs.writeShellScriptBin "brave-origin" ''
+      exec ${pkgs.brave}/bin/brave "$@"
+    '')
     # media
     mpv vlc ffmpeg gst_all_1.gst-libav gst_all_1.gst-plugins-bad gst_all_1.gst-plugins-ugly
     imagemagick feh imv
@@ -173,6 +190,38 @@
     font-awesome
   ];
   fonts.fontconfig.enable = true;
+
+  # /bin/bash and /usr/bin/python3
+  #
+  # NixOS only ships /bin/sh. The package rewrites the shebangs of everything
+  # in the MagikOS tree, but /bin/bash is also what anything else on the
+  # system assumes: packaging helpers, installer scripts and third-party
+  # software all hardcode it, and they fail with "bad interpreter" when it is
+  # missing.
+  #
+  # The same is true of /usr/bin/python3, which five scripts in the tree use.
+  # The package rewrites those too, but the test suite runs the scripts
+  # straight out of a git checkout, where the shebangs are still the
+  # originals.
+  #
+  # nixpkgs creates /bin/sh the same way; this mirrors that for the two
+  # interpreters MagikOS assumes.
+  system.activationScripts.binbash = lib.stringAfter [ "stdio" ] ''
+    mkdir -p /bin
+    chmod 0755 /bin
+    ln -sfn "${pkgs.bash}/bin/bash" /bin/.bash.tmp
+    mv /bin/.bash.tmp /bin/bash # atomically replace /bin/bash
+
+    mkdir -p /usr/bin
+    chmod 0755 /usr/bin
+    ln -sfn "${pkgs.python3}/bin/python3" /usr/bin/.python3.tmp
+    mv /usr/bin/.python3.tmp /usr/bin/python3 # atomically replace /usr/bin/python3
+
+    # sleep is called by absolute path from the stubs the hardware tests
+    # install, which stand in for a blocking supergfxctl.
+    ln -sfn "${pkgs.coreutils}/bin/sleep" /usr/bin/.sleep.tmp
+    mv /usr/bin/.sleep.tmp /usr/bin/sleep # atomically replace /usr/bin/sleep
+  '';
 
   # Nix
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
