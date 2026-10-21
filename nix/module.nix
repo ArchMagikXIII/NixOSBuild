@@ -6,18 +6,22 @@ let
   magikosPath = "${magikos}/share/magikos";
   bin = name: "${magikos}/bin/${name}";
 
-  # Recovers WAYLAND_DISPLAY from the running compositor and imports it into the
-  # systemd user manager. See magikos-session-env below for why that is needed.
+  # Recovers WAYLAND_DISPLAY and SWAYSOCK from the running compositor and
+  # imports them into the systemd user manager. See magikos-session-env below
+  # for why that is needed.
   sessionEnvScript = pkgs.writeShellApplication {
     name = "magikos-session-env";
     text = ''
       display=""
+      socksock=""
       for _ in $(seq 1 120); do
         for env in /proc/[0-9]*/environ; do
           if [ -r "$env" ]; then
             match=$(tr '\0' '\n' <"$env" 2>/dev/null | grep -m1 '^WAYLAND_DISPLAY=' || true)
             if [ -n "$match" ]; then
               display=''${match#WAYLAND_DISPLAY=}
+              sockmatch=$(tr '\0' '\n' <"$env" 2>/dev/null | grep -m1 '^SWAYSOCK=' || true)
+              socksock=''${sockmatch#SWAYSOCK=}
               break
             fi
           fi
@@ -31,6 +35,29 @@ let
       if [ -n "$display" ]; then
         WAYLAND_DISPLAY="$display" systemctl --user import-environment WAYLAND_DISPLAY
       fi
+      # SWAYSOCK is what swaymsg needs to reach the compositor, so any user
+      # service that shells out to swaymsg needs it in the user manager.
+      if [ -n "$socksock" ]; then
+        SWAYSOCK="$socksock" systemctl --user import-environment SWAYSOCK
+      fi
+
+      # Reach graphical-session.target.
+      #
+      # SDDM starts the session through its own wayland-session script rather
+      # than uwsm, so logind never marks the session graphical and
+      # graphical-session.target is never activated. Everything that needs it
+      # then stays dead for the whole session: xdg-desktop-portal refuses to
+      # start (no file picker, no screen share, no secret portal), and every
+      # MagikOS unit that is partOf graphical-session.target never runs.
+      #
+      # sway-session.target bindsTo graphical-session.target, and bindsTo
+      # implies a Requires, so starting it pulls the graphical target in as a
+      # dependency. graphical-session.target refuses a manual start on its own
+      # ("may be requested by dependency only"), so it has to be reached this
+      # way. This mirrors what nixpkgs' own sway session does through
+      # /etc/sway/config.d/nixos.conf, which the MagikOS config replaces.
+      systemctl --user start sway-session.target || true
+
       # Best effort: any of these may legitimately refuse to start (no bluetooth
       # adapter, another instance owns the bus name), and none of them should
       # hold up the rest of the session.
@@ -83,10 +110,44 @@ in
     ++ magikos.runtimeDeps
     ++ lib.optional cfg.tailscale.enable cfg.tailscale.package;
 
+    # A stable path to the current MagikOS tree.
+    #
+    # /etc/magikos is a symlink into the store, repointed on every rebuild.
+    # The package rewrites its own /usr/share/magikos references to this path
+    # rather than to the store path, because those references get copied into
+    # ~/.config, and a store path there would go stale (or get garbage
+    # collected) as soon as the package was rebuilt. A stable path keeps the
+    # seeded config working across rebuilds.
+    environment.etc =
+      {
+        "magikos".source = "${magikos}/share/magikos";
+      }
+      // lib.mapAttrs' (
+        name: _entry:
+        lib.nameValuePair "environment.d/${name}" {
+          source = "${magikosPath}/default/environment.d/${name}";
+        }
+      ) (builtins.readDir "${magikosPath}/default/environment.d");
+
     # The 65 scripts that read MAGIKOS_PATH default it to /usr/share/magikos.
     # Sessions that never touch the wrappers (systemd units, quickshell's own
     # Process calls, sway exec lines) rely on this instead.
-    environment.sessionVariables.MAGIKOS_PATH = magikosPath;
+    #
+    # Point it at the stable /etc/magikos rather than the store path: this
+    # lands in /etc/set-environment, which SDDM hands to the session, so a
+    # store path here would leave the whole session -- and the quickshell
+    # shell, which reads MAGIKOS_PATH to find its own plugins -- pointing at
+    # whichever build happened to be current when the session started.
+    environment.sessionVariables.MAGIKOS_PATH = "/etc/magikos";
+
+    # default/environment.d/*.conf are the session-wide environment
+    # MagikOS ships: the fcitx5 input-method variables that let Qt, GTK and
+    # SDL applications talk to the IME, and SWAY_UNSUPPORTED_GPU, which
+    # silences sway's startup advisory about an offloaded NVIDIA card.
+    #
+    # Nothing installed these, so fcitx5 ran but no application could reach
+    # it. They are installed the same way the systemd manager reads them on
+    # Arch: as environment.d drop-ins under /etc.
 
     # wayland-wm-app-daemon.service ships with uwsm, and MagikOS's sleep-lock
     # and autostart units expect it to exist.
@@ -251,6 +312,14 @@ in
         requires = [ "pipewire.service" ];
         wants = [ "wireplumber.service" ];
         partOf = [ "pipewire.service" ];
+        # The tuning graph is written by `magikos audio tuning on`, which
+        # installs ~/.config/pipewire/magikos-speaker-tuning.conf from the
+        # packaged host config. Upstream's first-run script does that on a
+        # fresh install, but that script is part of the Arch-only install
+        # tree and never runs here -- so on a machine with no tuning applied
+        # the unit had nothing to load and sat in a restart loop, failing
+        # with exit 254 every two seconds.
+        unitConfig.ConditionPathExists = "%h/.config/pipewire/magikos-speaker-tuning.conf";
         serviceConfig = {
           Type = "simple";
           ExecStart = "${pkgs.pipewire}/bin/pipewire -c magikos-speaker-tuning.conf";
