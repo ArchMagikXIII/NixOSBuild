@@ -122,36 +122,26 @@ stdenvNoCC.mkDerivation {
 
   src = fetchgit {
     url = "https://github.com/ArchMagikXIII/MagikOS.git";
-    rev = "49b13047d6877fc9cad4de023824f9c7d9626f3d";
-    hash = "sha256-Fsn1tpxWr/O3p2ldUUuOUAi7Exdx5z2cYhEjChE9As8=";
+    rev = "d5f89923f4aefa7e542f3ea10ec8375807a6fe5f";
+    hash = "sha256-V6ZKkh63jRXJWBjYVWbEaWL+0tc96IsIMTLxfBPQGFM=";
   };
 
-  # Adds a Nix backend to bin/magikos-pkg-backend, which otherwise aborts with
-  # "requires an Arch/CachyOS or Debian system" and takes out the ~60 scripts
-  # that call magikos-pkg-add to self-heal. Carried here rather than vendored
-  # into the MagikOS repository so this port stays self-contained; the same
-  # change is open upstream as a PR.
-  # nix-test-paths.patch teaches two more tests about the Nix port:
-  # pkg-backend-test.sh has to recognise the nix backend when it probes for
-  # an installed package manager, and version-test.sh has to run the script
-  # out of the checkout rather than the installed wrapper, because the
-  # wrapper pins MAGIKOS_PATH to the package and the test is about what
-  # happens when no package is installed at all.
-  # magikos-upstream-fixes.patch carries three fixes that are committed
-  # upstream but not yet in the pinned revision this package builds from:
-  # the missing metadata summaries on the two OpenRC commands, the command
-  # helpers replacing raw `command -v`, and quickshell's --no-duplicate flag
-  # on the sway autostart. Without them the package ships a tree whose own
+  # magikos-upstream-fixes.patch carries the fixes that are committed in the
+  # MagikOS checkout but not yet in the revision this package pins: the
+  # missing metadata summaries on the two OpenRC commands, the command
+  # helpers replacing raw `command -v`, quickshell's --no-duplicate flag on
+  # the sway autostart, and the package backend suite learning about the nix
+  # backend. Without them the package ships a tree whose own
   # `magikos commands --check` fails, and a sway reload starts a second bar.
   #
   # It is carried here so the port builds the same thing from a pinned
-  # upstream revision, rather than depending on a revision that does not
+  # upstream source, rather than depending on a revision that does not
   # exist yet. Drop it and bump rev/hash once the fixes are upstream.
-  patches = [
-    ../patches/nix-pkg-backend.patch
-    ../patches/nix-test-paths.patch
-    ../patches/magikos-upstream-fixes.patch
-  ];
+  #
+  # The nix package backend itself is not carried here any more: upstream
+  # merged it (8a38973a, "Add a Nix package backend so MagikOS runs on
+  # NixOS"), so the pinned revision already has it.
+  patches = [ ../patches/magikos-upstream-fixes.patch ];
 
   dontBuild = true;
 
