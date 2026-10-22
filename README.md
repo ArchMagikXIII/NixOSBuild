@@ -52,7 +52,7 @@ partitioning scripts.
 
 Pinned to MagikOS `a251e1c6` and built as it is. The nix package backend was
 merged upstream in 8a38973a, and the fixes that went with it, so nothing is
-carried against upstream any more and `patches/` is empty.
+carried against upstream any more.
 
 ## Port status
 
