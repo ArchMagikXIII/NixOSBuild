@@ -123,7 +123,7 @@ stdenvNoCC.mkDerivation {
   src = fetchgit {
     url = "https://github.com/ArchMagikXIII/MagikOS.git";
     rev = "a251e1c634a00580a6ed79c004bdb86e15a9d164";
-    hash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
+    hash = "sha256-YEvQqHzQKD+QiwVUZohKSyhyT2i187q91whQyKe0JWw=";
   };
 
   # Nothing is carried here any more. The nix package backend was merged

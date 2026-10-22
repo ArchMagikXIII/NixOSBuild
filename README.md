@@ -50,9 +50,12 @@ things the Arch packaging got for free:
 images. `install/` and `installer/` are excluded as Arch-specific `pacman` and
 partitioning scripts.
 
-Pinned to MagikOS `a251e1c6` and built as it is. The nix package backend was
-merged upstream in 8a38973a, and the fixes that went with it, so nothing is
-carried against upstream any more.
+Pinned to MagikOS `a251e1c6` and built as it is. That revision is the head of
+the `fix/command-metadata-and-duplicate-bar` branch rather than of `main`: it
+carries the missing command metadata, the command helpers, quickshell's
+--no-duplicate flag and the nix-aware backend tests, none of which are on
+`main` yet. Nothing is carried against upstream -- the nix package backend was
+merged in 8a38973a -- so the pin is the whole story.
 
 ## Port status
 
