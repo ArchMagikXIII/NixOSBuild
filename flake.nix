@@ -70,6 +70,25 @@
         ];
       };
 
+      # Bootable installer ISO. Layers the MagikOS desktop config on top of
+      # the minimal installation CD, so a machine booted from it can run
+      # `nixos-install --flake /iso/NixOSBuild#cachyos-x8664` (or any host)
+      # and end up with the full MagikOS system. Build with:
+      #   nix build .#nixosConfigurations.iso.config.system.build.isoImage
+      nixosConfigurations.iso = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./hosts/iso.nix
+          magikosModule
+          home-manager.nixosModules.home-manager
+          (hmFor { })
+          hmPackage
+          {
+            nixpkgs.overlays = [ magikosOverlay ];
+          }
+        ];
+      };
+
       # Standalone Home Manager, for `home-manager switch` on a non-NixOS host
       # or for iterating on dotfiles without a system rebuild.
       homeConfigurations."magikxiii@default" = home-manager.lib.homeManagerConfiguration {
