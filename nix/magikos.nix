@@ -122,26 +122,14 @@ stdenvNoCC.mkDerivation {
 
   src = fetchgit {
     url = "https://github.com/ArchMagikXIII/MagikOS.git";
-    rev = "d5f89923f4aefa7e542f3ea10ec8375807a6fe5f";
-    hash = "sha256-V6ZKkh63jRXJWBjYVWbEaWL+0tc96IsIMTLxfBPQGFM=";
+    rev = "a251e1c634a00580a6ed79c004bdb86e15a9d164";
+    hash = "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
   };
 
-  # magikos-upstream-fixes.patch carries the fixes that are committed in the
-  # MagikOS checkout but not yet in the revision this package pins: the
-  # missing metadata summaries on the two OpenRC commands, the command
-  # helpers replacing raw `command -v`, quickshell's --no-duplicate flag on
-  # the sway autostart, and the package backend suite learning about the nix
-  # backend. Without them the package ships a tree whose own
-  # `magikos commands --check` fails, and a sway reload starts a second bar.
-  #
-  # It is carried here so the port builds the same thing from a pinned
-  # upstream source, rather than depending on a revision that does not
-  # exist yet. Drop it and bump rev/hash once the fixes are upstream.
-  #
-  # The nix package backend itself is not carried here any more: upstream
-  # merged it (8a38973a, "Add a Nix package backend so MagikOS runs on
-  # NixOS"), so the pinned revision already has it.
-  patches = [ ../patches/magikos-upstream-fixes.patch ];
+  # Nothing is carried here any more. The nix package backend was merged
+  # upstream (8a38973a), and the fixes that were carried alongside it are
+  # upstream as well, so the pinned revision is the whole story.
+  patches = [ ];
 
   dontBuild = true;
 

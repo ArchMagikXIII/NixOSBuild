@@ -11,12 +11,13 @@ ported from an existing CachyOS/MagikOS machine.
 | `nix/magikos.nix` | Packages MagikOS from the upstream git repo into the store |
 | `nix/module.nix` | NixOS integration: systemd user units, sudo rules, `MAGIKOS_PATH` |
 | `nix/parity.nix` | The Arch-only drop-ins under `default/` + `/etc`, ported |
-| `patches/` | Changes carried against upstream MagikOS, rather than vendored |
-| `hosts/home.nix` | Home Manager dotfiles, sourced from the packaged config tree |
+| `hosts/home.nix` | Home Manager: seeds `~/.config`, links the dotfiles |
+| `hosts/dotfiles/` | The sway config, version-controlled and linked into `~/.config` |
 | `hosts/vm.nix` | QEMU test-VM hardware profile |
 | `hosts/iso.nix` | Bootable installer CD (minimal NixOS + MagikOS) |
 | `hardware-configuration.nix` | Real-machine disks (btrfs subvolumes, UEFI `/boot`) |
 | `configuration.nix` | Shared desktop: packages, Sway, PipeWire, SDDM |
+| `bin/` | Host-side helper scripts |
 
 ## The MagikOS package
 
@@ -24,16 +25,20 @@ MagikOS ships as `/usr/share/magikos` on Arch. Nix has no such prefix, so
 `nix/magikos.nix` installs the tree to `$out/share/magikos` and handles four
 things the Arch packaging got for free:
 
-1. **Shebangs.** 404 scripts use `#!/bin/bash` and 2 use `#!/usr/bin/python3`;
-   neither path exists in a Nix closure, so both are rewritten to store paths.
-2. **`/usr/share/magikos`.** 112 files reference it. The 65 that go through
-   `${MAGIKOS_PATH:-...}` are covered by the wrappers exporting `MAGIKOS_PATH`;
-   the rest are rewritten at build time.
+1. **Shebangs.** The tree has 864 scripts with a `#!/bin/bash` shebang and two
+   with `#!/usr/bin/python3`; neither path exists in a Nix closure, so both are
+   rewritten to store paths. The rewrite covers the whole tree rather than
+   `bin/` alone: the shell's plugin helpers, the udev rule's helper and the
+   systemd suspend hooks carry shebangs too, and they die with "bad
+   interpreter" if they are left alone.
+2. **`/usr/share/magikos`.** 81 files in the shipped tree reference it. The 65
+   that go through `${MAGIKOS_PATH:-...}` are covered by the wrappers exporting
+   `MAGIKOS_PATH`; the rest are rewritten at build time.
 3. **`/usr/bin/<tool>`.** `quickshell`, `uwsm-app` and `xdg-terminal-exec` are
    hardcoded by the autostart line and two in-tree shims. On NixOS these live on
    `PATH`, so the leading `/usr/bin` is stripped.
-4. **PATH.** Each of the ~417 scripts gets a wrapper exporting `MAGIKOS_PATH`
-   plus a 47-package runtime closure, so it works when invoked from sway `exec`
+4. **PATH.** Each of the 406 commands gets a wrapper exporting `MAGIKOS_PATH`
+   plus a 51-package runtime closure, so it works when invoked from sway `exec`
    lines, QuickShell `Process` calls, or systemd units rather than a login shell.
    Those wrappers use an absolute `#!` store path for the same reason as (1):
    a `#!/usr/bin/env bash` shebang exits 127 on NixOS, because `/usr/bin/env`
@@ -45,15 +50,9 @@ things the Arch packaging got for free:
 images. `install/` and `installer/` are excluded as Arch-specific `pacman` and
 partitioning scripts.
 
-Pinned to MagikOS `49b1304`, with `patches/nix-pkg-backend.patch` applied on top.
-MagikOS `main` is deliberately left alone; the same change is pushed to the
-`nix-pkg-backend` branch and open upstream as a PR:
-
-```
-https://github.com/ArchMagikXIII/MagikOS/compare/main...nix-pkg-backend
-```
-
-Once it lands upstream, drop the `patches` line and bump `rev`/`hash`.
+Pinned to MagikOS `a251e1c6` and built as it is. The nix package backend was
+merged upstream in 8a38973a, and the fixes that went with it, so nothing is
+carried against upstream any more and `patches/` is empty.
 
 ## Port status
 
@@ -61,26 +60,28 @@ Verified by booting the `vm` host under QEMU and inspecting the running guest.
 
 Working:
 
-- `magikos` package builds: 115M, 417 wrappers, no broken symlinks
-- All 47 runtime dependencies resolve against nixpkgs
+- `magikos` package builds: 109M, 406 wrappers, no broken symlinks
+- All 51 runtime dependencies resolve against nixpkgs
 - Both hosts build `system.build.toplevel` cleanly
 - Boots to the SDDM `magikos` theme, autologins into Sway, and the MagikOS
-  QuickShell bar starts (`quickshell -p $MAGIKOS_PATH/shell`)
+  QuickShell bar starts (`quickshell -n -p $MAGIKOS_PATH/shell`)
 - `systemctl --failed` reports nothing, in both the system and user managers
-- 8 MagikOS systemd *user* units ported to `systemd.user.services`
+- 9 systemd *user* units ported to `systemd.user.services` (8 MagikOS plus
+  the bluetooth agent)
 - Sudo rules from `etc/sudoers.d` (note `%wheel` is a group, not a user list)
-- Dotfiles seeded into `~/.config`: `sway`, `alacritty`, `foot`, `kitty`,
-  `ghostty`, `fish`, `fuzzel`, `wofi`, and the rest of `config/`
+- Dotfiles seeded into `~/.config`: `alacritty`, `kitty`, `ghostty`, `fish`,
+  `fuzzel`, `wofi`, and the rest of `config/`; the sway config is a symlink
+  into `hosts/dotfiles/` instead, so it is version-controlled and live
 - Everything in `default/` and `/etc` that had a NixOS equivalent (see below)
 
-Ported via `patches/nix-pkg-backend.patch`: `bin/magikos-pkg-backend` gained a
-Nix backend. Nix has no package database, so `pkg_installed` answers from the profile
-closure -- snapshotted once into a cache keyed on the profile generation, then
-grepped by attribute name. A transaction that genuinely needs a package fails
-loudly and points at the flake instead of mutating the store, because installing
-into a user profile would be silently undone by the next rebuild. Transactions
-no longer escalate, since user profiles are unprivileged. Covered by eight new
-cases in `test/shell.d/pkg-backend-test.sh`.
+`bin/magikos-pkg-backend` has a Nix backend, upstream since 8a38973a. Nix has no
+package database, so `pkg_installed` answers from the profile closure --
+snapshotted once into a cache keyed on the profile generation, then grepped by
+attribute name. A transaction that genuinely needs a package fails loudly and
+points at the flake instead of mutating the store, because installing into a
+user profile would be silently undone by the next rebuild. Transactions do not
+escalate, since user profiles are unprivileged. Covered by cases in
+`test/shell.d/pkg-backend-test.sh`.
 
 `nix/parity.nix` maps each Arch drop-in to its NixOS option. Nothing here is
 copied verbatim -- the file is the index:
@@ -89,8 +90,6 @@ copied verbatim -- the file is the index:
 |---|---|
 | `/etc/sysctl.d/90-magikos-file-watchers.conf` | `boot.kernel.sysctl` |
 | `/etc/sysctl.d/99-magikos-sysctl.conf` | `boot.kernel.sysctl` |
-| `/etc/sysctl.d/99-magikos-desktop-tuning.conf` | `boot.kernel.sysctl` |
-| `/etc/modprobe.d/99-amdgpu-overdrive.conf` | `boot.extraModprobeConfig` |
 | `/etc/modprobe.d/magikos-usb-autosuspend.conf` | `boot.extraModprobeConfig` |
 | `/etc/systemd/oomd.conf.d/10-magikos.conf` | `systemd.oomd.settings.OOM` |
 | `user/app.slice.d/10-oomd.conf` | `systemd.user.slices.app.sliceConfig` |
@@ -119,8 +118,14 @@ Copying is also what upstream does: MagikOS seeds `/etc/skel/.config` and never
 re-copies afterwards, keeping `share/magikos/config` as the resync source. The
 practical consequence is that edits to the packaged configs here do **not**
 propagate on rebuild -- delete `~/.config/<name>` to take the packaged version
-again. `./dotfiles/<name>` remains the versioned escape hatch, and is the one
-thing still symlinked, since it is authored in this repo rather than generated.
+again.
+
+The sway config is the exception. `hosts/dotfiles/sway` is a symlink into
+`~/.config/sway`, so it is version-controlled here and an edit takes effect as
+soon as it is saved, with a `swaymsg reload` and no rebuild. The symlink points
+at the live checkout rather than at the store, so the files stay writable; the
+store copy is the fallback when the checkout is not there, and the session
+still comes up.
 
 ## Known deviations
 
@@ -143,13 +148,13 @@ replacement rather than a file port:
    not force-loaded: if a given kernel lacks BBR the kernel keeps cubic and
    logs a warning, which beats failing to boot on a module that may not exist.
 
-Open item, not yet explained: `magikos-sleep-lock`
-(`magikos-system-sleep-monitor`) exits 0 immediately in the QEMU guest, so
-systemd restarts it every few seconds. The guest has no lid or suspend path, so
-this may simply be correct behaviour headless -- it is not reproduced by any
-of the above.
-
-## Hosts
+`magikos-sleep-lock` (`magikos-system-sleep-monitor`) waits for logind's
+PrepareForSleep signal through `dbus-monitor`, and a systemd unit's PATH is the
+user manager's `DefaultEnvironment`, which does not necessarily carry the
+system profile. When `dbus-monitor` is not found the coproc's exec fails, the
+pipe hits EOF, the monitor exits 0 and systemd restarts the unit every two
+seconds until it hits the start limit. `dbus` is a runtime dependency of the
+package for exactly this reason.
 
 ## Quick start (already on NixOS)
 
@@ -298,7 +303,7 @@ magikos-vm-sync
 
 - Unfree packages are enabled (`allowUnfree = true`) for apps like Steam/Brave.
 - This uses `nixos-unstable` and flakes; ensure flakes are enabled (`experimental-features = nix-command flakes`).
-- Source-system (CachyOS/MagikOS) packages not available in nixpkgs were omitted. See `packages-arch.txt` for the original Arch package list.
+- Source-system (CachyOS/MagikOS) packages not available in nixpkgs were omitted. `packages-arch.txt` is a snapshot of the Arch package list the port was made from, for reference when porting more of them.
 - **Login/password:** `users.users.magikxiii` in `configuration.nix` sets no password. On an existing install the
   current password is preserved, but on a *fresh* install the account is created locked. Set one with
   `sudo passwd magikxiii` (or add `hashedPassword`/`initialPassword` locally) or you will not be able to log in.

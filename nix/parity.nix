@@ -74,10 +74,9 @@ in
 
     # --- /etc/sysctl.d ----------------------------------------------------
     #
-    # Two source files set vm.vfs_cache_pressure: 99-magikos-sysctl.conf says
-    # 50 and 99-magikos-desktop-tuning.conf says 30. Both are read in
-    # lexical order, so the later sysctl.conf wins and the effective value on
-    # the source system is 50.
+    # The MagikOS tree ships two sysctl files, 90-magikos-file-watchers.conf
+    # and 99-magikos-sysctl.conf, and everything below comes from one of them
+    # unless it says otherwise.
     boot.kernel.sysctl = {
       # 90-magikos-file-watchers.conf: raise inotify limits so VS Code,
       # webpack and similar dev tools don't hit the 8192 ceiling.
@@ -94,7 +93,9 @@ in
       "vm.dirty_bytes" = 268435456;
       "vm.dirty_writeback_centisecs" = 1500;
 
-      # 99-magikos-desktop-tuning.conf
+      # Not in the MagikOS tree: no file there sets these. They were carried
+      # over from the machine this configuration was ported from, which ran
+      # with them, and are kept for the same reason.
       "net.core.rmem_max" = 8388608;
       "net.core.wmem_max" = 8388608;
       # BBR is only usable if the kernel ships it. The sysctl is set
@@ -106,10 +107,13 @@ in
 
     # --- /etc/modprobe.d ---------------------------------------------------
     boot.extraModprobeConfig = lib.concatStringsSep "\n" [
-      # Disable the undervolt/overclock feature mask; the source system runs
-      # this so amdgpu takes its default power/clock behaviour.
+      # Not in the MagikOS tree: no file there sets this. Carried over from
+      # the machine this configuration was ported from, which ran with it, to
+      # disable the undervolt/overclock feature mask so amdgpu takes its
+      # default power/clock behaviour.
       "options amdgpu ppfeaturemask=0xFFF7FFFF"
-      # Autosuspend fights the external monitors and docks this desktop uses.
+      # magikos-usb-autosuspend.conf: autosuspend fights the external
+      # monitors and docks this desktop uses.
       "options usbcore autosuspend=-1"
     ];
 

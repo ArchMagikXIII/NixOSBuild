@@ -1,3 +1,9 @@
+# The Arch package list of the machine this configuration was ported from.
+#
+# A snapshot, for reference when porting more of it: the packages that are not
+# in nixpkgs have no equivalent here, and the rest are provided by the
+# configuration.nix package list. Nothing reads this file.
+#
 accountsservice
 alsa-firmware
 alsa-plugins
