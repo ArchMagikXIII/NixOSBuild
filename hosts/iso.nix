@@ -29,4 +29,12 @@
   # The minimal CD ships no NetworkManager by default; enable it so the
   # installer can pull packages if the flake copy is missing.
   networking.networkmanager.enable = true;
+  # Carry the flake on the CD so `nixos-install` can use it offline. Copy the
+  # whole repo into /iso/NixOSBuild on the image.
+  isoImage.contents = [
+    {
+      source = pkgs.runCommand "NixOSBuild-flake" { } "cp -r ${./.} $out";
+      target = "/iso/NixOSBuild";
+    }
+  ];
 }
