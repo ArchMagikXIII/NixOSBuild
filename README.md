@@ -14,6 +14,7 @@ ported from an existing CachyOS/MagikOS machine.
 | `patches/` | Changes carried against upstream MagikOS, rather than vendored |
 | `hosts/home.nix` | Home Manager dotfiles, sourced from the packaged config tree |
 | `hosts/vm.nix` | QEMU test-VM hardware profile |
+| `hosts/iso.nix` | Bootable installer CD (minimal NixOS + MagikOS) |
 | `hardware-configuration.nix` | Real-machine disks (btrfs subvolumes, UEFI `/boot`) |
 | `configuration.nix` | Shared desktop: packages, Sway, PipeWire, SDDM |
 
@@ -169,13 +170,14 @@ of the above.
 
 ## Hosts
 
-This flake exposes two hosts. They share `configuration.nix` (desktop, packages,
+This flake exposes three hosts. They share `configuration.nix` (desktop, packages,
 services) but have completely separate hardware profiles.
 
 | Host | Profile | Disk layout | Bootloader |
 |---|---|---|---|
 | `cachyos-x8664` | `hardware-configuration.nix` | btrfs subvolumes, separate vfat `/boot` | systemd-boot (UEFI) |
 | `vm` | `hosts/vm.nix` | single ext4 `/`, no `/boot` | none — booted via QEMU `-kernel`/`-initrd` |
+| `iso` | `hosts/iso.nix` | live CD (squashfs) | ISOLINUX + EFI |
 
 Build them by suffix:
 
@@ -196,6 +198,20 @@ The simplest way to run it is `system.build.vm`, which needs no disk at all:
 ```bash
 nix run .#nixosConfigurations.vm.config.system.build.vm
 ```
+
+The `iso` host produces a bootable installer CD:
+
+```bash
+nix build .#nixosConfigurations.iso.config.system.build.isoImage
+# result/iso/nixos-minimal-*.iso  (also copied to ~/nixos-magikos-installer.iso)
+```
+
+Flash it to a USB stick and boot any machine from it. The live CD runs as root
+on tty1 with Intel i915 KMS enabled (targeting the HP x360 14 / Pentium N5000),
+carries the flake at `/iso/NixOSBuild`, and installs the `cachyos-x8664` host
+with `nixos-install --flake /iso/NixOSBuild#cachyos-x8664`. The target disk's
+UUIDs must match `hardware-configuration.nix`, or run `nixos-generate-config`
+first.
 
 Note that `hosts/vm.nix` sets `virtualisation.vmVariant`, not the outer
 `virtualisation` options: this nixpkgs builds `system.build.vm` from a separate
